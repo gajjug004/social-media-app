@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, UserConnection
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model to retrieve user details."""
@@ -50,5 +50,21 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
     
 class LoginSerializer(serializers.Serializer):
-    mobile = serializers.CharField()
+    mobile = serializers.CharField(max_length=15)
     password = serializers.CharField()
+
+class UserConnectionSerializer(serializers.ModelSerializer):
+    """Serializer for user connections"""
+    
+    user_from = UserSerializer()
+    user_to = UserSerializer()
+    
+    class Meta:
+        model = UserConnection
+        fields = [
+            "user_from",
+            "user_to",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
