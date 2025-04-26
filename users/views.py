@@ -3,11 +3,13 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import action
 from django.contrib.auth import authenticate
+from rest_framework import permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserSerializer, RegisterSerializer, LoginSerializer
 from .models import User
 
 class UserViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
     
     def list(self, request):
         """Retrieve all users"""

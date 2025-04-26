@@ -22,7 +22,8 @@ class User(AbstractUser):
     name = models.CharField(max_length=100)
     mobile = models.CharField(max_length=15, unique=True)
     email = models.EmailField(unique=True)
-    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     username = None
     USERNAME_FIELD = "mobile"
     REQUIRED_FIELDS = ['name', 'email']
