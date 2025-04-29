@@ -78,8 +78,11 @@ class UserViewSet(viewsets.ViewSet):
         if status:
             connections = connections.filter(status=status)
         serializer = UserConnectionSerializer(connections, many=True)
-        return Response(serializer.data)
-
+        return Response({
+            "count": connections.count(),
+            "connections": serializer.data
+        })
+        
     @action(detail=True, methods=["post"])
     def send_connection_request(self, request, pk=None):
         """Allow the authenticated user to send a connection request to another user"""
@@ -140,3 +143,28 @@ class UserViewSet(viewsets.ViewSet):
         connection.save()
 
         return Response({"detail": "Connection request rejected."}, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=["get"])
+    def mutual_connections(self, request, pk=None):
+        """Returns mutual connections between the logged-in user and the profile user."""
+        viewer = request.user
+        profile_user = get_object_or_404(User, pk=pk)
+
+        # Get accepted connections for viewer
+        viewer_connections = UserConnection.objects.filter(
+            Q(user_from=viewer, status='accepted')
+        ).values_list('user_to_id', flat=True)
+
+        # Get accepted connections for profile user
+        profile_connections = UserConnection.objects.filter(
+            Q(user_from=profile_user, status='accepted')
+        ).values_list('user_to_id', flat=True)
+
+        # Find mutual connection IDs
+        mutual_ids = set(viewer_connections).intersection(set(profile_connections))
+
+        # Fetch user objects for mutual connections
+        mutual_users = User.objects.filter(id__in=mutual_ids)
+        serializer = UserSerializer(mutual_users, many=True)
+        return Response(serializer.data)
+
