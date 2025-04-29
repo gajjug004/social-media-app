@@ -75,7 +75,6 @@ class UserViewSet(viewsets.ViewSet):
         """Retrieve all user connections filtered by status"""
         connections = UserConnection.objects.filter(user_from=request.user)
         status = request.query_params.get('status')
-        print(status)
         if status:
             connections = connections.filter(status=status)
         serializer = UserConnectionSerializer(connections, many=True)
