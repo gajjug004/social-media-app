@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockAuth } from '../services/mockAuth';
-import { mockPosts } from '../services/mockPosts';
+import Auth from '../services/Auth';
+import { mockPosts } from '../services/Posts';
 
 function Home() {
   const navigate = useNavigate();
@@ -17,7 +17,7 @@ function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { user } = await mockAuth.getUser();
+        const { user } = await Auth.getUser();
         if (!user) {
           navigate('/login');
           return;

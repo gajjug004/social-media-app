@@ -1,6 +1,6 @@
 import { users } from '../mockData/users';
 
-export const mockProfile = {
+export const UserProfile = {
   getProfile: (userId) => {
     const user = users.find(u => u.id === userId);
     return Promise.resolve(user);

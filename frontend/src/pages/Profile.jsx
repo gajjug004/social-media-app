@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { mockAuth } from '../services/mockAuth';
-import { mockProfile } from '../services/mockProfile';
+import Auth from '../services/Auth';
+import { UserProfile } from '../services/Profile';
 
 function Profile() {
   const { id } = useParams();
@@ -16,7 +16,7 @@ function Profile() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const { user } = await mockAuth.getUser();
+        const { user } = await Auth.getUser();
         
         if (!user) {
           navigate('/login');
@@ -27,12 +27,12 @@ function Profile() {
         const profileId = id === 'me' ? user.id : id;
 
         // Fetch profile data
-        const profileData = await mockProfile.getProfile(profileId);
+        const profileData = await UserProfile.getProfile(profileId);
         if (!profileData) throw new Error('Profile not found');
         setProfile(profileData);
 
         // Fetch connections
-        const connectionsData = await mockProfile.getConnections(profileId);
+        const connectionsData = await UserProfile.getConnections(profileId);
         setConnections(connectionsData);
 
         // Check if viewing user is connected to profile and get mutual connections
@@ -40,7 +40,7 @@ function Profile() {
           const isUserConnected = user.connections.includes(profileId);
           setIsConnected(isUserConnected);
 
-          const mutualData = await mockProfile.getMutualConnections(user.id, profileId);
+          const mutualData = await UserProfile.getMutualConnections(user.id, profileId);
           setMutualConnections(mutualData);
         }
 
@@ -56,8 +56,8 @@ function Profile() {
 
   const handleConnect = async () => {
     try {
-      const { user } = await mockAuth.getUser();
-      await mockProfile.addConnection(user.id, id);
+      const { user } = await Auth.getUser();
+      await Profile.addConnection(user.id, id);
       setIsConnected(true);
     } catch (error) {
       console.error('Error connecting:', error);
