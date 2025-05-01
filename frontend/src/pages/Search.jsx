@@ -70,12 +70,12 @@ function Search() {
         {suggestions.length > 0 && (
           <ul className="absolute z-10 bg-white border border-gray-200 rounded-md w-full mt-1 shadow">
             {suggestions.map((user) => (
-              <li key={user.user_to.id}>
+              <li key={user.id}>
                 <Link
-                  to={`/profile/${user.user_to.id}`}
+                  to={`/profile/${user.id}`}
                   className="block px-4 py-2 hover:bg-gray-100 text-sm text-gray-800"
                 >
-                  {user.user_to.name} ({user.user_to.email}) ({user.user_to.mobile})
+                  {user.name} ({user.email}) ({user.mobile})
                 </Link>
               </li>
             ))}
