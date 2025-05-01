@@ -21,14 +21,18 @@ from django.conf import settings
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
+from django.urls import path, include, re_path
+from users.views import IndexView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/',include('users.urls')),
     path('api/',include('posts.urls')),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('', IndexView.as_view(), name='index'),
+    re_path(r'^(?!assets/).*$', IndexView.as_view(), name='index'),
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_URL)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.BASE_DIR / 'frontend' / 'dist' / 'assets')

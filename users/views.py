@@ -213,3 +213,7 @@ class UserViewSet(viewsets.ViewSet):
             "count": connections.count(),
             "connections": serializer.data
         })
+
+from django.views.generic import TemplateView
+class IndexView(TemplateView):
+    template_name = "index.html"
