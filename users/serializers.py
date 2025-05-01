@@ -1,8 +1,9 @@
 from rest_framework import serializers
+from django.db.models import Q
 from .models import User, UserConnection
 
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer for User model to retrieve user details."""
+    connection_status = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -13,9 +14,28 @@ class UserSerializer(serializers.ModelSerializer):
             "mobile",
             "created_at",
             "updated_at",
-            "is_active"
+            "is_active",
+            "connection_status"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_connection_status(self, obj):
+        """Return the connection status between the requesting user and the target user."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return "none"
+
+        # Check for a connection either way
+        connection = UserConnection.objects.filter(
+            Q(user_from=request.user, user_to=obj) |
+            Q(user_from=obj, user_to=request.user)
+        ).order_by('-created_at').first()  # In case multiple, get the latest
+
+        if connection:
+            return connection.status  # 'accepted', 'pending', or 'rejected'
+        
+        return "none"
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     """Serializer for registering a new user."""

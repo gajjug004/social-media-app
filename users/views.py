@@ -14,30 +14,26 @@ class UserViewSet(viewsets.ViewSet):
     
     def list(self, request):
         """Retrieve all users with optional search functionality"""
-        queryset = User.objects.all()
+        queryset = User.objects.all().exclude(id=request.user.id)
         
-        # Retrieve query parameters for searching
-        name = request.query_params.get('name', None)
-        email = request.query_params.get('email', None)
-        mobile = request.query_params.get('mobile', None)
+        # Get single search query
+        search = request.query_params.get('search', None)
 
-        # Apply filters if search parameters are provided
-        if name:
-            queryset = queryset.filter(name__icontains=name)
-        if email:
-            queryset = queryset.filter(email__icontains=email)
-        if mobile:
-            queryset = queryset.filter(mobile=mobile)
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(mobile__icontains=search)
+            )
 
         # Serialize the filtered queryset
-        serializer = UserSerializer(queryset, many=True)
-        
+        serializer = UserSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data)
 
     def retrieve(self, request, pk=None):
         """Retrieve details of a single user"""
         user = get_object_or_404(User, pk=pk)
-        serializer = UserSerializer(user)
+        serializer = UserSerializer(user, context={"request": request})
         return Response(serializer.data)
 
     @action(detail=False, methods=["post"], permission_classes=[permissions.AllowAny])
@@ -70,17 +66,46 @@ class UserViewSet(viewsets.ViewSet):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def me(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+    
     @action(detail=False, methods=["get"])
     def connections(self, request):
-        """Retrieve all user connections filtered by status"""
-        connections = UserConnection.objects.filter(user_from=request.user)
-        status = request.query_params.get('status')
-        if status:
-            connections = connections.filter(status=status)
-        serializer = UserConnectionSerializer(connections, many=True)
+        """Retrieve all user connections filtered by status (bidirectional)"""
+        user_id = request.query_params.get('user')
+        user = get_object_or_404(User, pk=user_id) if user_id else request.user
+
+        status_param = request.query_params.get('status')
+
+        connections = UserConnection.objects.filter(
+            Q(user_from=user) | Q(user_to=user)
+        )
+        if status_param:
+            connections = connections.filter(status=status_param)
+
+        # Search filter
+        search = request.query_params.get('search')
+        if search:
+            connections = connections.filter(
+                Q(user_from__name__icontains=search) |
+                Q(user_to__name__icontains=search) |
+                Q(user_from__email__icontains=search) |
+                Q(user_to__email__icontains=search)
+            )
+
+        # Get the other user in each connection
+        connection_data = []
+        for connection in connections:
+            other_user = connection.user_to if connection.user_from == user else connection.user_from
+            serialized_user = UserSerializer(other_user).data
+            serialized_user['connection_status'] = connection.status
+            connection_data.append(serialized_user)
+
         return Response({
-            "count": connections.count(),
-            "connections": serializer.data
+            "count": len(connection_data),
+            "connections": connection_data
         })
         
     @action(detail=True, methods=["post"])
@@ -112,10 +137,11 @@ class UserViewSet(viewsets.ViewSet):
     def accept_connection_request(self, request, pk=None):
         """Allow the authenticated user to accept a connection request"""
 
-        user_to = get_object_or_404(User, pk=pk)
+        user_from = get_object_or_404(User, pk=pk)
+        user_to = request.user
         
         connection = UserConnection.objects.filter(
-            user_from=request.user, user_to=user_to, status='pending'
+            user_from=user_from, user_to=user_to, status='pending'
         ).first()
 
         if not connection:
@@ -150,21 +176,40 @@ class UserViewSet(viewsets.ViewSet):
         viewer = request.user
         profile_user = get_object_or_404(User, pk=pk)
 
-        # Get accepted connections for viewer
+        # Get all accepted connections of viewer (both directions)
         viewer_connections = UserConnection.objects.filter(
-            Q(user_from=viewer, status='accepted')
-        ).values_list('user_to_id', flat=True)
+            Q(user_from=viewer, status='accepted') | Q(user_to=viewer, status='accepted')
+        ).values_list('user_from_id', 'user_to_id')
 
-        # Get accepted connections for profile user
+        viewer_ids = set()
+        for uf, ut in viewer_connections:
+            viewer_ids.add(uf if uf != viewer.id else ut)
+
+        # Get all accepted connections of profile_user (both directions)
         profile_connections = UserConnection.objects.filter(
-            Q(user_from=profile_user, status='accepted')
-        ).values_list('user_to_id', flat=True)
+            Q(user_from=profile_user, status='accepted') | Q(user_to=profile_user, status='accepted')
+        ).values_list('user_from_id', 'user_to_id')
+
+        profile_ids = set()
+        for uf, ut in profile_connections:
+            profile_ids.add(uf if uf != profile_user.id else ut)
 
         # Find mutual connection IDs
-        mutual_ids = set(viewer_connections).intersection(set(profile_connections))
+        mutual_ids = viewer_ids.intersection(profile_ids)
 
-        # Fetch user objects for mutual connections
         mutual_users = User.objects.filter(id__in=mutual_ids)
         serializer = UserSerializer(mutual_users, many=True)
         return Response(serializer.data)
 
+
+    @action(detail=False, methods=["get"])
+    def pending_connections(self, request):
+        """Retrieve all pending connections"""
+
+        user = request.user
+        connections = UserConnection.objects.filter(user_to=user, status='pending')
+        serializer = UserConnectionSerializer(connections, many=True)
+        return Response({
+            "count": connections.count(),
+            "connections": serializer.data
+        })

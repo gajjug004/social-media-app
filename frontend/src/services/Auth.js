@@ -12,39 +12,36 @@ const Auth = {
 
   login: async (mobile, password) => {
     try {
-      const response = await api.post('users/login/', {
-        mobile,
-        password,
-      });
-
+      const response = await api.post('users/login/', { mobile, password });
       const { access, refresh } = response.data;
+  
       localStorage.setItem('access', access);
       localStorage.setItem('refresh', refresh);
-
+  
       const userResponse = await Auth.getUser();
+      localStorage.setItem('user', JSON.stringify(userResponse.user));
       return userResponse;
     } catch (error) {
       throw new Error('Invalid credentials');
     }
-  },
+  },  
 
   register: async (userData) => {
     try {
       const response = await api.post('users/register/', userData);
-      const user = response.data;
-
-      // Auto-login (optional)
-      const loginResponse = await Auth.login(user.mobile, userData.password);
-      return loginResponse;
+      return response.data;
     } catch (error) {
-      const errMsg = error.response?.data?.detail || 'Registration failed';
-      throw new Error(errMsg);
+      if (error.response?.data && typeof error.response.data === 'object') {
+        throw { fieldErrors: error.response.data };
+      }
+      throw new Error('Registration failed');
     }
-  },
+  },  
 
   logout: () => {
     localStorage.removeItem('access');
     localStorage.removeItem('refresh');
+    localStorage.removeItem('user');
     return Promise.resolve();
   },
 };

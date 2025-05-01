@@ -9,7 +9,7 @@ const api = axios.create({
   },
 });
 
-// Automatically add access token to each request
+// Add access token to each request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access');
   if (token) {
@@ -20,4 +20,21 @@ api.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
+// Handle 401 errors globally
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Remove tokens
+      localStorage.removeItem('access');
+      localStorage.removeItem('refresh');
+
+      // Redirect to login
+      // window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
+

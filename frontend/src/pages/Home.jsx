@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Auth from '../services/Auth';
-import { mockPosts } from '../services/Posts';
+import Posts from '../services/Posts';
 
 function Home() {
   const navigate = useNavigate();
@@ -9,7 +9,7 @@ function Home() {
   const [newPost, setNewPost] = useState({
     content: '',
     visibility: 'public',
-    image: ''
+    imageFile: null
   });
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -17,13 +17,13 @@ function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { user } = await Auth.getUser();
+        const user = JSON.parse(localStorage.getItem('user'));
         if (!user) {
           navigate('/login');
           return;
         }
         setCurrentUser(user);
-        const fetchedPosts = await mockPosts.getAllPosts();
+        const fetchedPosts = await Posts.getAllPosts();
         setPosts(fetchedPosts);
         setIsLoading(false);
       } catch (error) {
@@ -38,20 +38,25 @@ function Home() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const post = await mockPosts.createPost(
-        currentUser.id,
-        newPost.content,
-        newPost.visibility,
-        newPost.image || null
-      );
+      const formData = new FormData();
+      formData.append('userId', currentUser.id);
+      formData.append('content', newPost.content);
+      formData.append('visibility', newPost.visibility);
+      if (newPost.imageFile) {
+        formData.append('image', newPost.imageFile);
+      }
+
+      const post = await Posts.createPost(formData);
+
       const enrichedPost = {
         ...post,
         author: currentUser,
         likes: [],
         comments: []
       };
+
       setPosts([enrichedPost, ...posts]);
-      setNewPost({ content: '', visibility: 'public', image: '' });
+      setNewPost({ content: '', visibility: 'public', imageFile: null });
     } catch (error) {
       console.error('Error creating post:', error);
     }
@@ -59,9 +64,9 @@ function Home() {
 
   const handleLike = async (postId) => {
     try {
-      const updatedPost = await mockPosts.likePost(postId, currentUser.id);
-      setPosts(posts.map(post => 
-        post.id === postId 
+      const updatedPost = await Posts.likePost(postId, currentUser.id);
+      setPosts(posts.map(post =>
+        post.id === postId
           ? { ...post, likes: [...post.likes, currentUser] }
           : post
       ));
@@ -72,7 +77,7 @@ function Home() {
 
   const handleUnlike = async (postId) => {
     try {
-      const updatedPost = await mockPosts.unlikePost(postId, currentUser.id);
+      const updatedPost = await Posts.unlikePost(postId, currentUser.id);
       setPosts(posts.map(post =>
         post.id === postId
           ? { ...post, likes: post.likes.filter(user => user.id !== currentUser.id) }
@@ -104,10 +109,9 @@ function Home() {
           ></textarea>
           <div className="mt-4">
             <input
-              type="url"
-              value={newPost.image}
-              onChange={(e) => setNewPost({ ...newPost, image: e.target.value })}
-              placeholder="Add image URL (optional)"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setNewPost({ ...newPost, imageFile: e.target.files[0] })}
               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
             />
           </div>
@@ -118,7 +122,7 @@ function Home() {
               className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="public">Public</option>
-              <option value="connections">Connections Only</option>
+              {/* <option value="connections">Connections Only</option> */}
               <option value="private">Private</option>
             </select>
             <button
@@ -137,17 +141,17 @@ function Home() {
           <div key={post.id} className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center mb-4">
               <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                <span className="text-lg text-gray-600">{post.author.name[0]}</span>
+                <span className="text-lg text-gray-600">{post.user.name[0]}</span>
               </div>
               <div className="ml-4">
-                <p 
+                <p
                   className="font-medium hover:text-blue-500 cursor-pointer"
-                  onClick={() => navigate(`/profile/${post.author.id}`)}
+                  onClick={() => navigate(`/profile/${post.user.id}`)}
                 >
-                  {post.author.name}
+                  {post.user.name}
                 </p>
                 <p className="text-sm text-gray-500">
-                  {new Date(post.createdAt).toLocaleDateString('en-US', {
+                  {new Date(post.created_at).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
@@ -161,7 +165,7 @@ function Home() {
             {post.image && (
               <div className="mb-4">
                 <img
-                  src={post.image}
+                  src={`http://localhost:8000${post.image}`}
                   alt="Post content"
                   className="rounded-lg w-full h-auto"
                   loading="lazy"
@@ -171,20 +175,13 @@ function Home() {
             <div className="flex items-center justify-between text-sm text-gray-500">
               <div className="flex items-center space-x-4">
                 <button
-                  onClick={() => 
-                    post.likes.some(user => user.id === currentUser.id)
-                      ? handleUnlike(post.id)
-                      : handleLike(post.id)
-                  }
-                  className={`flex items-center space-x-1 ${
-                    post.likes.some(user => user.id === currentUser.id)
-                      ? 'text-blue-500'
-                      : 'text-gray-500'
-                  }`}
+                  onClick={() => {}}
+                  className="flex items-center space-x-1 text-gray-500 cursor-not-allowed"
+                  disabled
                 >
-                  <span>{post.likes.length} Likes</span>
+                  <span>0 Likes</span>
                 </button>
-                <span>{post.comments.length} Comments</span>
+                <span>0 Comments</span>
               </div>
               <span className="capitalize">{post.visibility}</span>
             </div>

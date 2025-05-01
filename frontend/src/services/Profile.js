@@ -1,32 +1,25 @@
-import { users } from '../mockData/users';
+import api from '../config/axiosConfig';
 
-export const UserProfile = {
-  getProfile: (userId) => {
-    const user = users.find(u => u.id === userId);
-    return Promise.resolve(user);
-  },
-
-  getConnections: (userId) => {
-    const user = users.find(u => u.id === userId);
-    const connections = user.connections.map(id => users.find(u => u.id === id));
-    return Promise.resolve(connections);
-  },
-
-  getMutualConnections: (userId1, userId2) => {
-    const user1 = users.find(u => u.id === userId1);
-    const user2 = users.find(u => u.id === userId2);
-    const mutualConnections = user1.connections.filter(id => user2.connections.includes(id))
-      .map(id => users.find(u => u.id === id));
-    return Promise.resolve(mutualConnections);
-  },
-
-  addConnection: (userId1, userId2) => {
-    const user1 = users.find(u => u.id === userId1);
-    const user2 = users.find(u => u.id === userId2);
-    if (!user1.connections.includes(userId2)) {
-      user1.connections.push(userId2);
-      user2.connections.push(userId1);
+const UserProfile = {
+  getProfile: async (userId) => {
+    try {
+      const response = await api.get(`users/${userId}/`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Unable to fetch user');
     }
-    return Promise.resolve();
+  },
+
+  searchProfile: async (search = null) => {
+    try {
+      const params = search ? { search } : {};
+      const response = await api.get('users/', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error('Unable to fetch user');
+    }
   }
+  
 };
+
+export default UserProfile;

@@ -33,10 +33,7 @@ class PostViewSet(viewsets.ViewSet):
             posts = posts.filter(visibility=visibility)
 
         serializer = PostSerializer(posts.order_by('-created_at'), many=True)
-        return Response({
-            "count": posts.count(),
-            "posts": serializer.data
-        })
+        return Response(serializer.data)
 
     def retrieve(self, request, pk=None):
         """Retrieve a single post by ID."""

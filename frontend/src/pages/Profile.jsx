@@ -1,46 +1,49 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Auth from '../services/Auth';
-import { UserProfile } from '../services/Profile';
+import Connections from '../services/Connections';
+import UserProfile from '../services/Profile';
 
 function Profile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [connections, setConnections] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
   const [mutualConnections, setMutualConnections] = useState([]);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(null);
+  const [loggedInUser, setLoggedInUser] = useState(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const { user } = await Auth.getUser();
-        
+        const user = JSON.parse(localStorage.getItem('user'));
         if (!user) {
           navigate('/login');
           return;
         }
 
-        setIsOwnProfile(id === 'me' || id === user.id);
-        const profileId = id === 'me' ? user.id : id;
+        setLoggedInUser(user);
+        const ownProfileCheck = id === String(user.id);
+        setIsOwnProfile(ownProfileCheck);
 
-        // Fetch profile data
-        const profileData = await UserProfile.getProfile(profileId);
+        const profileData = await UserProfile.getProfile(id);
         if (!profileData) throw new Error('Profile not found');
         setProfile(profileData);
 
-        // Fetch connections
-        const connectionsData = await UserProfile.getConnections(profileId);
-        setConnections(connectionsData);
+        if (ownProfileCheck) {
+          const connectionsData = await Connections.getConnections('accepted');
+          setConnections(connectionsData.connections);
 
-        // Check if viewing user is connected to profile and get mutual connections
-        if (!isOwnProfile) {
-          const isUserConnected = user.connections.includes(profileId);
-          setIsConnected(isUserConnected);
-
-          const mutualData = await UserProfile.getMutualConnections(user.id, profileId);
+          const pendingData = await Connections.pendingConnections();
+          setPendingRequests(pendingData.connections || []);
+        } else {
+          const userConnections = await Connections.getConnections('accepted', id);
+          setConnections(userConnections.connections);
+          setConnectionStatus(profileData.connection_status);
+          const mutualData = await Connections.getMutualConnections(id);
           setMutualConnections(mutualData);
         }
 
@@ -56,11 +59,30 @@ function Profile() {
 
   const handleConnect = async () => {
     try {
-      const { user } = await Auth.getUser();
-      await Profile.addConnection(user.id, id);
-      setIsConnected(true);
+      await Connections.sendRequest(profile.id);
+      setConnectionStatus('pending');
     } catch (error) {
       console.error('Error connecting:', error);
+    }
+  };
+
+  const handleAccept = async (requestId) => {
+    try {
+      await Connections.acceptRequest(requestId);
+      setPendingRequests(pendingRequests.filter(req => req.id !== requestId));
+      const updatedConnections = await Connections.getConnections('accepted');
+      setConnections(updatedConnections.connections);
+    } catch (error) {
+      console.error('Error accepting request:', error);
+    }
+  };
+
+  const handleReject = async (requestId) => {
+    try {
+      await Connections.rejectRequest(requestId);
+      setPendingRequests(pendingRequests.filter(req => req.id !== requestId));
+    } catch (error) {
+      console.error('Error rejecting request:', error);
     }
   };
 
@@ -86,7 +108,7 @@ function Profile() {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center">
-              <span className="text-3xl text-gray-600">{profile.name[0]}</span>
+              <span className="text-3xl text-gray-600">{profile.name?.[0]}</span>
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{profile.name}</h1>
@@ -94,16 +116,70 @@ function Profile() {
               <p className="text-gray-600">{profile.mobile}</p>
             </div>
           </div>
-          {!isOwnProfile && !isConnected && (
-            <button
-              onClick={handleConnect}
-              className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors"
-            >
-              Connect
-            </button>
+
+          {!isOwnProfile && (
+            <div>
+              {connectionStatus === 'accepted' ? (
+                <span className="text-green-600 font-semibold">Connected</span>
+              ) : connectionStatus === 'pending' ? (
+                <span className="text-yellow-600 font-semibold">Request Pending</span>
+              ) : connectionStatus === 'rejected' ? (
+                <button
+                  onClick={handleConnect}
+                  className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  Reconnect
+                </button>
+              ) : (
+                <button
+                  onClick={handleConnect}
+                  className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
+
+      {isOwnProfile && pendingRequests.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Pending Requests ({pendingRequests.length})</h2>
+          <div className="bg-white rounded-lg shadow-md p-4">
+            {pendingRequests.map((request) => (
+              <div
+                key={request.user_from.id}
+                className="flex items-center justify-between py-2 border-b last:border-0"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                    <span className="text-lg text-gray-600">{request.user_from.name?.[0]}</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">{request.user_from.name}</p>
+                    <p className="text-sm text-gray-500">{request.user_from.email}</p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleAccept(request.user_from.id)}
+                    className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => handleReject(request.user_from.id)}
+                    className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
@@ -115,14 +191,12 @@ function Profile() {
               connections.map((connection) => (
                 <div
                   key={connection.id}
-                  className="flex items-center justify-between py-2 border-b last:border-0"
+                  className="flex items-center justify-between py-2 border-b last:border-0 cursor-pointer"
                   onClick={() => navigate(`/profile/${connection.id}`)}
-                  role="button"
-                  tabIndex={0}
                 >
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-lg text-gray-600">{connection.name[0]}</span>
+                      <span className="text-lg text-gray-600">{connection.name?.[0]}</span>
                     </div>
                     <div>
                       <p className="font-medium">{connection.name}</p>
@@ -147,14 +221,12 @@ function Profile() {
                 mutualConnections.map((connection) => (
                   <div
                     key={connection.id}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
+                    className="flex items-center justify-between py-2 border-b last:border-0 cursor-pointer"
                     onClick={() => navigate(`/profile/${connection.id}`)}
-                    role="button"
-                    tabIndex={0}
                   >
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-lg text-gray-600">{connection.name[0]}</span>
+                        <span className="text-lg text-gray-600">{connection.name?.[0]}</span>
                       </div>
                       <div>
                         <p className="font-medium">{connection.name}</p>
